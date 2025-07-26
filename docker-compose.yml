@@ -1,0 +1,91 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: llm-obs-postgres
+    environment:
+      POSTGRES_DB: llm_observability
+      POSTGRES_USER: llm_user
+      POSTGRES_PASSWORD: llm_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - llm-network
+
+  # Redis for caching and message queue
+  redis:
+    image: redis:7-alpine
+    container_name: llm-obs-redis
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - llm-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: llm-obs-backend
+    environment:
+      - DATABASE_URL=postgresql://llm_user:llm_password@postgres:5432/llm_observability
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    networks:
+      - llm-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Background Worker for processing logs
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: llm-obs-worker
+    environment:
+      - DATABASE_URL=postgresql://llm_user:llm_password@postgres:5432/llm_observability
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    networks:
+      - llm-network
+    command: python worker.py
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: llm-obs-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - llm-network
+    environment:
+      - REACT_APP_API_URL=http://localhost:8001
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  llm-network:
+    driver: bridge
