@@ -1,6 +1,6 @@
 # LLM Observability Platform
 
-A lightweight, containerized observability platform for monitoring LLM applications, similar to DeepEval but focused on real-time monitoring and analytics.
+A lightweight, containerized observability platform for monitoring LLM applications, focused on real-time monitoring and analytics.
 
 ## Features
 
